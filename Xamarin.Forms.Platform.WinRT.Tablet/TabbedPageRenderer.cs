@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Windows.UI.Xaml;
@@ -12,8 +13,11 @@ namespace Xamarin.Forms.Platform.WinRT
 	public class TabbedPageRenderer
 		: IVisualElementRenderer
 	{
-		Canvas _canvas;
+		const string TabBarHeaderTextBlockName = "TabbedPageHeaderTextBlock";
 
+		Color _barBackgroundColor;
+		Color _barTextColor;
+		Canvas _canvas;
 		bool _disposed;
 		TabsControl _tabs;
 		VisualElementTracker<Page, Canvas> _tracker;
@@ -83,16 +87,16 @@ namespace Xamarin.Forms.Platform.WinRT
 						Container = _canvas
 					};
 
-					_canvas.Loaded += OnLoaded;
-					_canvas.Unloaded += OnUnloaded;
+					_canvas.Loaded += canvas_OnLoaded;
+					_canvas.Unloaded += canvas_OnUnloaded;
+
+					_tabs.Loaded += tabs_OnLoaded;
 				}
 
 				_tabs.DataContext = element;
 
 				OnPagesChanged(Page.Children, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
 				UpdateCurrentPage();
-				UpdateBarTextColor();
-				UpdateBarBackgroundColor();
 
 				((INotifyCollectionChanged)Page.Children).CollectionChanged += OnPagesChanged;
 				element.PropertyChanged += OnElementPropertyChanged;
@@ -112,7 +116,7 @@ namespace Xamarin.Forms.Platform.WinRT
 		Brush GetBarForegroundBrush()
 		{
 			object defaultColor = Windows.UI.Xaml.Application.Current.Resources["ApplicationForegroundThemeBrush"];
-			if (Page.BarTextColor.IsDefault)
+			if (Page.BarTextColor.IsDefault && defaultColor != null)
 				return (Brush)defaultColor;
 			return Page.BarTextColor.ToBrush();
 		}
@@ -176,7 +180,11 @@ namespace Xamarin.Forms.Platform.WinRT
 		void OnElementPropertyChanged(object sender, PropertyChangedEventArgs e)
 		{
 			if (e.PropertyName == nameof(TabbedPage.CurrentPage))
+			{
 				UpdateCurrentPage();
+				UpdateBarTextColor();
+				UpdateBarBackgroundColor();
+			}
 			else if (e.PropertyName == TabbedPage.BarTextColorProperty.PropertyName)
 				UpdateBarTextColor();
 			else if (e.PropertyName == TabbedPage.BarBackgroundColorProperty.PropertyName)
@@ -185,12 +193,43 @@ namespace Xamarin.Forms.Platform.WinRT
 
 		void UpdateBarBackgroundColor()
 		{
-			_tabs.Background = GetBarBackgroundBrush();
+			TabbedPage tabbedPage = Element as TabbedPage;
+			if (tabbedPage == null) return;
+			var barBackgroundColor = tabbedPage.BarBackgroundColor;
+
+			if (barBackgroundColor == _barBackgroundColor) return;
+			_barBackgroundColor = barBackgroundColor;
+
+			var controlToolbarBackground = _tabs.ToolbarBackground;
+			if (controlToolbarBackground == null && barBackgroundColor.IsDefault) return;
+
+			var brush = GetBarBackgroundBrush();
+			if (brush == controlToolbarBackground) return;
+
+			_tabs.ToolbarBackground = brush;
 		}
 
 		void UpdateBarTextColor()
 		{
-			_tabs.Foreground = GetBarForegroundBrush();
+			TabbedPage tabbedPage = Element as TabbedPage;
+			if (tabbedPage == null) return;
+			var barTextColor = tabbedPage.BarTextColor;
+
+			if (barTextColor == _barTextColor) return;
+			_barTextColor = barTextColor;
+
+			var controlToolbarForeground = _tabs.ToolbarForeground;
+			if (controlToolbarForeground == null && barTextColor.IsDefault) return;
+
+			var brush = GetBarForegroundBrush();
+			if (brush == controlToolbarForeground) return;
+
+			_tabs.ToolbarForeground = brush;
+
+			foreach (var tabBarTextBlock in GetTabBarTextBlocks(_tabs))
+			{
+				tabBarTextBlock.Foreground = brush;
+			}
 		}
 
 		void UpdateCurrentPage()
@@ -202,13 +241,19 @@ namespace Xamarin.Forms.Platform.WinRT
 				_canvas.Children.Add(renderer.ContainerElement);
 		}
 
-		void OnLoaded(object sender, RoutedEventArgs args)
+		void canvas_OnLoaded(object sender, RoutedEventArgs args)
 		{
 			if (Page == null)
 				return;
 
 			ShowTabs();
 			PageController.SendAppearing();
+		}
+
+		void tabs_OnLoaded(object sender, RoutedEventArgs e)
+		{
+			UpdateBarTextColor();
+			UpdateBarBackgroundColor();
 		}
 
 		Windows.UI.Xaml.Controls.Page GetTopPage()
@@ -262,10 +307,27 @@ namespace Xamarin.Forms.Platform.WinRT
 			page.TopAppBar = null;
 		}
 
-		void OnUnloaded(object sender, RoutedEventArgs args)
+		void canvas_OnUnloaded(object sender, RoutedEventArgs args)
 		{
 			RemoveTabs();
 			PageController?.SendDisappearing();
+		}
+
+		IEnumerable<TextBlock> GetTabBarTextBlocks(DependencyObject parent)
+		{
+			int myChildrenCount = VisualTreeHelper.GetChildrenCount(parent);
+			for (int i = 0; i < myChildrenCount; i++)
+			{
+				var child = VisualTreeHelper.GetChild(parent, i);
+				var controlName = child.GetValue(FrameworkElement.NameProperty) as string;
+				if (controlName == TabBarHeaderTextBlockName)
+					yield return child as TextBlock;
+				else
+				{
+					foreach (var subChild in GetTabBarTextBlocks(child))
+						yield return subChild;
+				}
+			}
 		}
 	}
 }

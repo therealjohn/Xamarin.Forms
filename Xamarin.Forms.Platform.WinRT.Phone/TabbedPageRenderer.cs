@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using Windows.UI.Xaml;
@@ -13,7 +14,8 @@ namespace Xamarin.Forms.Platform.WinRT
 	{
 		public TabbedPagePresenter()
 		{
-			SizeChanged += (s, e) => {
+			SizeChanged += (s, e) =>
+			{
 				if (ActualWidth > 0 && ActualHeight > 0)
 				{
 					var tab = ((Page)DataContext);
@@ -26,6 +28,17 @@ namespace Xamarin.Forms.Platform.WinRT
 	public class TabbedPageRenderer
 		: IVisualElementRenderer, ITitleProvider
 	{
+		const string TabBarHeaderTextBlockName = "TabbedPageHeaderTextBlock";
+
+		Color _barBackgroundColor;
+		Color _barTextColor;
+		bool _disposed;
+		VisualElementTracker<Page, Pivot> _tracker;
+		bool _showTitle;
+
+		ITitleProvider TitleProvider => this;
+		IPageController PageController => Element as IPageController;
+
 		public event EventHandler<VisualElementChangedEventArgs> ElementChanged;
 
 		public FrameworkElement ContainerElement
@@ -68,15 +81,16 @@ namespace Xamarin.Forms.Platform.WinRT
 			{
 				if (Control == null)
 				{
-					Control = new FormsPivot {
-						Style = (Windows.UI.Xaml.Style)Windows.UI.Xaml.Application.Current.Resources["TabbedPageStyle"]
+					Control = new FormsPivot
+					{
+						Style = (Windows.UI.Xaml.Style)Windows.UI.Xaml.Application.Current.Resources["TabbedPageStyle"],
+						ItemTemplate = (Windows.UI.Xaml.DataTemplate)Windows.UI.Xaml.Application.Current.Resources["TabbedPage"]
 					};
-					Control.HeaderTemplate = (Windows.UI.Xaml.DataTemplate)Windows.UI.Xaml.Application.Current.Resources["TabbedPageHeader"];
-					Control.ItemTemplate = (Windows.UI.Xaml.DataTemplate)Windows.UI.Xaml.Application.Current.Resources["TabbedPage"];
 
 					Control.SelectionChanged += OnSelectionChanged;
 
-					Tracker = new BackgroundTracker<Pivot>(Windows.UI.Xaml.Controls.Control.BackgroundProperty) {
+					Tracker = new BackgroundTracker<Pivot>(Windows.UI.Xaml.Controls.Control.BackgroundProperty)
+					{
 						Element = (Page)element,
 						Control = Control,
 						Container = Control
@@ -88,9 +102,8 @@ namespace Xamarin.Forms.Platform.WinRT
 
 				Control.DataContext = Element;
 				OnPagesChanged(Element.Children, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+
 				UpdateCurrentPage();
-				UpdateBarTextColor();
-				UpdateBarBackgroundColor();
 
 				((INotifyCollectionChanged)Element.Children).CollectionChanged += OnPagesChanged;
 				element.PropertyChanged += OnElementPropertyChanged;
@@ -173,7 +186,7 @@ namespace Xamarin.Forms.Platform.WinRT
 					return;
 				_showTitle = value;
 
-				(Control as FormsPivot).ToolbarVisibility = _showTitle ? Visibility.Visible : Visibility.Collapsed;
+				Control.ToolbarVisibility = _showTitle ? Visibility.Visible : Visibility.Collapsed;
 			}
 		}
 
@@ -195,7 +208,7 @@ namespace Xamarin.Forms.Platform.WinRT
 		{
 			set
 			{
-				(Control as FormsPivot).ToolbarBackground = value;
+				Control.ToolbarBackground = value;
 			}
 		}
 
@@ -203,7 +216,7 @@ namespace Xamarin.Forms.Platform.WinRT
 		{
 			set
 			{
-				(Control as FormsPivot).ToolbarForeground = value;
+				Control.ToolbarForeground = value;
 			}
 		}
 
@@ -213,10 +226,6 @@ namespace Xamarin.Forms.Platform.WinRT
 			if (changed != null)
 				changed(this, e);
 		}
-
-		bool _disposed;
-		VisualElementTracker<Page, Pivot> _tracker;
-		bool _showTitle;
 
 		void OnPagesChanged(object sender, NotifyCollectionChangedEventArgs e)
 		{
@@ -238,7 +247,11 @@ namespace Xamarin.Forms.Platform.WinRT
 		void OnElementPropertyChanged(object sender, PropertyChangedEventArgs e)
 		{
 			if (e.PropertyName == nameof(TabbedPage.CurrentPage))
+			{
 				UpdateCurrentPage();
+				UpdateBarTextColor();
+				UpdateBarBackgroundColor();
+			}
 			else if (e.PropertyName == TabbedPage.BarTextColorProperty.PropertyName)
 				UpdateBarTextColor();
 			else if (e.PropertyName == TabbedPage.BarBackgroundColorProperty.PropertyName)
@@ -257,18 +270,14 @@ namespace Xamarin.Forms.Platform.WinRT
 
 		void OnLoaded(object sender, RoutedEventArgs args)
 		{
-			if (Element == null)
-				return;
-
-			((IPageController)Element).SendAppearing();
+			PageController?.SendAppearing();
+			UpdateBarTextColor();
+			UpdateBarBackgroundColor();
 		}
 
 		void OnUnloaded(object sender, RoutedEventArgs args)
 		{
-			if (Element == null)
-				return;
-
-			((IPageController)Element).SendDisappearing();
+			PageController?.SendDisappearing();
 		}
 
 		void OnTrackerUpdated(object sender, EventArgs e)
@@ -287,19 +296,48 @@ namespace Xamarin.Forms.Platform.WinRT
 		Brush GetBarForegroundBrush()
 		{
 			object defaultColor = Windows.UI.Xaml.Application.Current.Resources["AppBarItemForegroundThemeBrush"];
-			if (Element.BarTextColor.IsDefault)
+			if (Element.BarTextColor.IsDefault && defaultColor != null)
 				return (Brush)defaultColor;
 			return Element.BarTextColor.ToBrush();
 		}
 
 		void UpdateBarBackgroundColor()
 		{
-			Control.ToolbarBackground = GetBarBackgroundBrush();
+			if (Element == null) return;
+			var barBackgroundColor = Element.BarBackgroundColor;
+
+			if (barBackgroundColor == _barBackgroundColor) return;
+			_barBackgroundColor = barBackgroundColor;
+
+			var controlToolbarBackground = Control.ToolbarBackground;
+			if (controlToolbarBackground == null && barBackgroundColor.IsDefault) return;
+
+			var brush = GetBarBackgroundBrush();
+			if (brush == controlToolbarBackground) return;
+
+			TitleProvider.BarBackgroundBrush = brush;
 		}
 
 		void UpdateBarTextColor()
 		{
-			Control.ToolbarForeground = GetBarForegroundBrush();
+			if (Element == null) return;
+			var barTextColor = Element.BarTextColor;
+
+			if (barTextColor == _barTextColor) return;
+			_barTextColor = barTextColor;
+
+			var controlToolbarForeground = Control.ToolbarForeground;
+			if (controlToolbarForeground == null && barTextColor.IsDefault) return;
+
+			var brush = GetBarForegroundBrush();
+			if (brush == controlToolbarForeground) return;
+
+			TitleProvider.BarForegroundBrush = brush;
+
+			foreach (var tabBarTextBlock in GetTabBarTextBlocks(Control))
+			{
+				tabBarTextBlock.Foreground = brush;
+			}
 		}
 
 		void UpdateTitle(Page child)
@@ -314,11 +352,28 @@ namespace Xamarin.Forms.Platform.WinRT
 			{
 				Control.Title = navigationRenderer.Title;
 			}
-			else {
-				((ITitleProvider)this).ShowTitle = false;
+			else
+			{
+				TitleProvider.ShowTitle = false;
 			}
 
 		}
 
+		IEnumerable<TextBlock> GetTabBarTextBlocks(DependencyObject parent)
+		{
+			int myChildrenCount = VisualTreeHelper.GetChildrenCount(parent);
+			for (int i = 0; i < myChildrenCount; i++)
+			{
+				var child = VisualTreeHelper.GetChild(parent, i);
+				var controlName = child.GetValue(FrameworkElement.NameProperty) as string;
+				if (controlName == TabBarHeaderTextBlockName)
+					yield return child as TextBlock;
+				else
+				{
+					foreach (var subChild in GetTabBarTextBlocks(child))
+						yield return subChild;
+				}
+			}
+		}
 	}
 }
