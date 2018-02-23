@@ -11,7 +11,7 @@ namespace Xamarin.Forms
 		IList<string> IStyleSelectable.Classes
 			=> StyleClass;
 
-		BindableProperty IStylable.GetProperty(string key)
+		BindableProperty IStylable.GetProperty(string key, bool inheriting)
 		{
 			StylePropertyAttribute styleAttribute;
 			if (!Internals.Registrar.StyleProperties.TryGetValue(key, out styleAttribute))
@@ -20,15 +20,23 @@ namespace Xamarin.Forms
 			if (!styleAttribute.TargetType.GetTypeInfo().IsAssignableFrom(GetType().GetTypeInfo()))
 				return null;
 
+			//do not inherit non-inherited properties
+			if (inheriting && !styleAttribute.Inherited)
+				return null;
+
 			if (styleAttribute.BindableProperty != null)
 				return styleAttribute.BindableProperty;
 
 			var propertyOwnerType = styleAttribute.PropertyOwnerType ?? GetType();
+#if NETSTANDARD1_0
+			var bpField = propertyOwnerType.GetField(styleAttribute.BindablePropertyName);
+#else
 			var bpField = propertyOwnerType.GetField(styleAttribute.BindablePropertyName,
-													   BindingFlags.Public
-													 | BindingFlags.NonPublic
-													 | BindingFlags.Static
-													 | BindingFlags.FlattenHierarchy);
+															  BindingFlags.Public
+															| BindingFlags.NonPublic
+															| BindingFlags.Static
+															| BindingFlags.FlattenHierarchy);
+#endif
 			if (bpField == null)
 				return null;
 
@@ -39,24 +47,6 @@ namespace Xamarin.Forms
 		{
 			foreach (var styleSheet in this.GetStyleSheets())
 				((IStyle)styleSheet).Apply(this);
-		}
-
-		//on parent set, or on parent stylesheet changed, reapply all
-		void ApplyStyleSheetsOnParentSet()
-		{
-			var parent = Parent;
-			if (parent == null)
-				return;
-			var sheets = new List<StyleSheet>();
-			while (parent != null) {
-				var visualParent = parent as VisualElement;
-				var vpSheets = visualParent?.GetStyleSheets();
-				if (vpSheets != null)
-					sheets.AddRange(vpSheets);
-				parent = parent.Parent;
-			}
-			for (var i = sheets.Count - 1; i >= 0; i--)
-				((IStyle)sheets[i]).Apply(this);
 		}
 	}
 }

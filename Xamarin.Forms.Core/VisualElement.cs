@@ -652,7 +652,6 @@ namespace Xamarin.Forms
 #pragma warning restore 0618
 
 			FlowController.NotifyFlowDirectionChanged();
-			ApplyStyleSheetsOnParentSet();
 		}
 
 		protected virtual void OnSizeAllocated(double width, double height)
@@ -713,7 +712,14 @@ namespace Xamarin.Forms
 
 		internal void MockBounds(Rectangle bounds)
 		{
+#if NETSTANDARD2_0
 			(_mockX, _mockY, _mockWidth, _mockHeight) = bounds;
+#else
+			_mockX = bounds.X;
+			_mockY = bounds.Y;
+			_mockWidth = bounds.Width;
+			_mockHeight = bounds.Height;
+#endif
 		}
 
 		internal virtual void OnConstraintChanged(LayoutConstraint oldConstraint, LayoutConstraint newConstraint)
@@ -728,14 +734,6 @@ namespace Xamarin.Forms
 		internal virtual void OnIsVisibleChanged(bool oldValue, bool newValue)
 		{
 			InvalidateMeasureInternal(InvalidationTrigger.Undefined);
-		}
-
-		internal override void OnParentResourcesChanged(object sender, ResourcesChangedEventArgs e)
-		{
-			if (e == ResourcesChangedEventArgs.StyleSheets)
-				ApplyStyleSheetsOnParentSet();
-			else
-				base.OnParentResourcesChanged(sender, e);
 		}
 
 		internal override void OnResourcesChanged(object sender, ResourcesChangedEventArgs e)

@@ -52,6 +52,14 @@ namespace Xamarin.Forms
 			ClearValue(propertyKey.BindableProperty, fromStyle:false, checkAccess: false);
 		}
 
+		public bool IsSet(BindableProperty targetProperty)
+		{
+			if (targetProperty == null)
+				throw new ArgumentNullException(nameof(targetProperty));
+
+			return GetContext(targetProperty) != null;
+		}
+
 		public object GetValue(BindableProperty property)
 		{
 			if (property == null)
@@ -246,6 +254,25 @@ namespace Xamarin.Forms
 			if (!ReferenceEquals(property2, null))
 				values[2] = property2.DefaultValueCreator == null ? property2.DefaultValue : CreateAndAddContext(property2).Value;
 
+			return values;
+		}
+
+		[EditorBrowsable(EditorBrowsableState.Never)]
+		internal object[] GetValues(params BindableProperty[] properties)
+		{
+			var values = new object[properties.Length];
+			for (var i = 0; i < _properties.Count; i++) {
+				var context = _properties[i];
+				var index = properties.IndexOf(context.Property);
+				if (index < 0)
+					continue;
+				values[index] = context.Value;
+			}
+			for (var i = 0; i < values.Length; i++) {
+				if (!ReferenceEquals(values[i], null))
+					continue;
+				values[i] = properties[i].DefaultValueCreator == null ? properties[i].DefaultValue : CreateAndAddContext(properties[i]).Value;
+			}
 			return values;
 		}
 

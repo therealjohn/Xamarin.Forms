@@ -5,27 +5,22 @@ using System.Threading.Tasks;
 using ElmSharp;
 using Tizen.Applications;
 using Xamarin.Forms.Internals;
-using EButton = ElmSharp.Button;
-using EColor = ElmSharp.Color;
 using ELayout = ElmSharp.Layout;
-using EProgressBar = ElmSharp.ProgressBar;
+using DeviceOrientation = Xamarin.Forms.Internals.DeviceOrientation;
 
 namespace Xamarin.Forms.Platform.Tizen
 {
 
 	public class FormsApplication : CoreUIApplication
 	{
-		Platform _platform;
+		ITizenPlatform _platform;
 		Application _application;
 		bool _isInitialStart;
-		int _pageBusyCount;
-		Native.Dialog _pageBusyDialog;
 		Window _window;
 
 		protected FormsApplication()
 		{
 			_isInitialStart = true;
-			_pageBusyCount = 0;
 		}
 
 		/// <summary>
@@ -60,9 +55,6 @@ namespace Xamarin.Forms.Platform.Tizen
 		protected override void OnTerminate()
 		{
 			base.OnTerminate();
-			MessagingCenter.Unsubscribe<Page, AlertArguments>(this, "Xamarin.SendAlert");
-			MessagingCenter.Unsubscribe<Page, bool>(this, "Xamarin.BusySet");
-			MessagingCenter.Unsubscribe<Page, ActionSheetArguments>(this, "Xamarin.ShowActionSheet");
 			if (_platform != null)
 			{
 				_platform.Dispose();
@@ -124,102 +116,6 @@ namespace Xamarin.Forms.Platform.Tizen
 			SetPage(_application.MainPage);
 		}
 
-		static void ActionSheetSignalNameHandler(Page sender, ActionSheetArguments arguments)
-		{
-			Native.Dialog alert = new Native.Dialog(Forms.Context.MainWindow);
-
-			alert.Title = arguments.Title;
-			Box box = new Box(alert);
-
-			if (null != arguments.Destruction)
-			{
-				Native.Button destruction = new Native.Button(alert)
-				{
-					Text = arguments.Destruction,
-					TextColor = EColor.Red,
-					AlignmentX = -1
-				};
-				destruction.Clicked += (s, evt) =>
-				{
-					arguments.SetResult(arguments.Destruction);
-					alert.Dismiss();
-				};
-				destruction.Show();
-				box.PackEnd(destruction);
-			}
-
-			foreach (string buttonName in arguments.Buttons)
-			{
-				Native.Button button = new Native.Button(alert)
-				{
-					Text = buttonName,
-					AlignmentX = -1
-				};
-				button.Clicked += (s, evt) =>
-				{
-					arguments.SetResult(buttonName);
-					alert.Dismiss();
-				};
-				button.Show();
-				box.PackEnd(button);
-			}
-
-			box.Show();
-			alert.Content = box;
-
-			if (null != arguments.Cancel)
-			{
-				EButton cancel = new EButton(Forms.Context.MainWindow) { Text = arguments.Cancel };
-				alert.NegativeButton = cancel;
-				cancel.Clicked += (s, evt) =>
-				{
-					alert.Dismiss();
-				};
-			}
-
-			alert.BackButtonPressed += (s, evt) =>
-			{
-				alert.Dismiss();
-			};
-
-			alert.Show();
-		}
-
-		static void AlertSignalNameHandler(Page sender, AlertArguments arguments)
-		{
-			Native.Dialog alert = new Native.Dialog(Forms.Context.MainWindow);
-			alert.Title = arguments.Title;
-			var message = arguments.Message.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace(Environment.NewLine, "<br>");
-			alert.Text = message;
-
-			EButton cancel = new EButton(alert) { Text = arguments.Cancel };
-			alert.NegativeButton = cancel;
-			cancel.Clicked += (s, evt) =>
-			{
-				arguments.SetResult(false);
-				alert.Dismiss();
-			};
-
-			if (arguments.Accept != null)
-			{
-				EButton ok = new EButton(alert) { Text = arguments.Accept };
-				alert.NeutralButton = ok;
-				ok.Clicked += (s, evt) =>
-				{
-					arguments.SetResult(true);
-					alert.Dismiss();
-				};
-			}
-
-			alert.BackButtonPressed += (s, evt) =>
-			{
-				arguments.SetResult(false);
-				alert.Dismiss();
-			};
-
-			alert.Show();
-		}
-
 		void AppOnPropertyChanged(object sender, PropertyChangedEventArgs args)
 		{
 			if ("MainPage" == args.PropertyName)
@@ -228,60 +124,25 @@ namespace Xamarin.Forms.Platform.Tizen
 			}
 		}
 
-		void ShowActivityIndicatorDialog(bool enabled)
-		{
-			if (null == _pageBusyDialog)
-			{
-				_pageBusyDialog = new Native.Dialog(Forms.Context.MainWindow)
-				{
-					Orientation = PopupOrientation.Top,
-				};
-
-				var activity = new EProgressBar(_pageBusyDialog)
-				{
-					Style = "process_large",
-					IsPulseMode = true,
-				};
-				activity.PlayPulse();
-				activity.Show();
-
-				_pageBusyDialog.Content = activity;
-
-			}
-			_pageBusyCount = Math.Max(0, enabled ? _pageBusyCount + 1 : _pageBusyCount - 1);
-			if (_pageBusyCount > 0)
-			{
-				_pageBusyDialog.Show();
-			}
-			else
-			{
-				_pageBusyDialog.Dismiss();
-				_pageBusyDialog = null;
-			}
-		}
-
-		void BusySetSignalNameHandler(Page sender, bool enabled)
-		{
-			ShowActivityIndicatorDialog(enabled);
-		}
-
 		void SetPage(Page page)
 		{
 			if (!Forms.IsInitialized)
 			{
 				throw new InvalidOperationException("Call Forms.Init (UIApplication) before this");
 			}
+
 			if (_platform != null)
 			{
 				_platform.SetPage(page);
 				return;
 			}
 
-			MessagingCenter.Subscribe<Page, bool>(this, Page.BusySetSignalName, BusySetSignalNameHandler);
-			MessagingCenter.Subscribe<Page, AlertArguments>(this, Page.AlertSignalName, AlertSignalNameHandler);
-			MessagingCenter.Subscribe<Page, ActionSheetArguments>(this, Page.ActionSheetSignalName, ActionSheetSignalNameHandler);
+			_platform = Platform.CreatePlatform(BaseLayout);
+			_platform.HasAlpha = MainWindow.Alpha;
+			BaseLayout.SetContent(_platform.GetRootNativeView());
 
-			_platform = new Platform(this);
+			_platform.RootNativeViewChanged += (s, e) => BaseLayout.SetContent(e.RootNativeView);
+
 			if (_application != null)
 			{
 				_application.Platform = _platform;
@@ -295,41 +156,39 @@ namespace Xamarin.Forms.Platform.Tizen
 
 			MainWindow.Active();
 			MainWindow.Show();
+
 			var conformant = new Conformant(MainWindow);
 			conformant.Show();
 
-			// Create the base (default) layout for the application
 			var layout = new ELayout(conformant);
 			layout.SetTheme("layout", "application", "default");
 			layout.Show();
 
-			conformant.SetContent(layout);
 			BaseLayout = layout;
+			conformant.SetContent(BaseLayout);
+
 			MainWindow.AvailableRotations = DisplayRotation.Degree_0 | DisplayRotation.Degree_90 | DisplayRotation.Degree_180 | DisplayRotation.Degree_270;
 
 			MainWindow.Deleted += (s, e) =>
 			{
 				Exit();
 			};
+
+			Device.Info.CurrentOrientation = MainWindow.GetDeviceOrientation();
+
 			MainWindow.RotationChanged += (sender, e) =>
 			{
-				switch (MainWindow.Rotation)
+				Device.Info.CurrentOrientation = MainWindow.GetDeviceOrientation();
+			};
+
+			MainWindow.BackButtonPressed += (sender, e) =>
+			{
+				if (_platform != null)
 				{
-					case 0:
-						Device.Info.CurrentOrientation = Internals.DeviceOrientation.PortraitUp;
-						break;
-
-					case 90:
-						Device.Info.CurrentOrientation = Internals.DeviceOrientation.LandscapeLeft;
-						break;
-
-					case 180:
-						Device.Info.CurrentOrientation = Internals.DeviceOrientation.PortraitDown;
-						break;
-
-					case 270:
-						Device.Info.CurrentOrientation = Internals.DeviceOrientation.LandscapeRight;
-						break;
+					if (!_platform.SendBackButtonPressed())
+					{
+						Exit();
+					}
 				}
 			};
 		}
@@ -349,18 +208,38 @@ namespace Xamarin.Forms.Platform.Tizen
 				Log.Warn("Exit was already called or FormsApplication is not initialized yet.");
 				return;
 			}
-			// before everything is closed, inform the MainPage that it is disappearing
 			try
 			{
-				(_platform?.Page as IPageController)?.SendDisappearing();
+				_platform.Dispose();
 				_platform = null;
 			}
 			catch (Exception e)
 			{
-				Log.Error("Exception thrown from SendDisappearing: {0}", e.Message);
+				Log.Error("Exception thrown from Dispose: {0}", e.Message);
 			}
 
 			base.Exit();
+		}
+	}
+	static class WindowExtension
+	{
+		public static DeviceOrientation GetDeviceOrientation(this Window window)
+		{
+			DeviceOrientation orientation = DeviceOrientation.Other;
+			var isPortraitDevice = Forms.NaturalOrientation.IsPortrait();
+			switch (window.Rotation)
+			{
+				case 0:
+				case 180:
+					orientation = isPortraitDevice ? DeviceOrientation.Portrait : DeviceOrientation.Landscape;
+					break;
+
+				case 90:
+				case 270:
+					orientation = isPortraitDevice ? DeviceOrientation.Landscape : DeviceOrientation.Portrait;
+					break;
+			}
+			return orientation;
 		}
 	}
 }

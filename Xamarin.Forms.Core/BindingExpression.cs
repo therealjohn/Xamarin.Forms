@@ -23,9 +23,9 @@ namespace Xamarin.Forms
 		internal BindingExpression(BindingBase binding, string path)
 		{
 			if (binding == null)
-				throw new ArgumentNullException("binding");
+				throw new ArgumentNullException(nameof(binding));
 			if (path == null)
-				throw new ArgumentNullException("path");
+				throw new ArgumentNullException(nameof(path));
 
 			Binding = binding;
 			Path = path;
@@ -106,10 +106,10 @@ namespace Xamarin.Forms
 		void ApplyCore(object sourceObject, BindableObject target, BindableProperty property, bool fromTarget = false)
 		{
 			BindingMode mode = Binding.GetRealizedMode(_targetProperty);
-			if (mode == BindingMode.OneWay && fromTarget)
+			if ((mode == BindingMode.OneWay || mode == BindingMode.OneTime) && fromTarget)
 				return;
 
-			bool needsGetter = (mode == BindingMode.TwoWay && !fromTarget) || mode == BindingMode.OneWay;
+			bool needsGetter = (mode == BindingMode.TwoWay && !fromTarget) || mode == BindingMode.OneWay || mode == BindingMode.OneTime;
 			bool needsSetter = !needsGetter && ((mode == BindingMode.TwoWay && fromTarget) || mode == BindingMode.OneWayToSource);
 
 			object current = sourceObject;
@@ -295,7 +295,8 @@ namespace Xamarin.Forms
 					property = sourceType.BaseType.GetProperty(indexerName);
 				if (property == null) //is the indexer defined on implemented interface ?
 				{
-					foreach (var implementedInterface in sourceType.ImplementedInterfaces) {
+					foreach (var implementedInterface in sourceType.ImplementedInterfaces)
+					{
 						property = implementedInterface.GetProperty(indexerName);
 						if (property != null)
 							break;
@@ -342,6 +343,7 @@ namespace Xamarin.Forms
 						if (bindablePropertyField != null && bindablePropertyField.FieldType == typeof(BindableProperty) && sourceType.ImplementedInterfaces.Contains(typeof(IElementController)))
 						{
 							MethodInfo setValueMethod = null;
+#if NETSTANDARD1_0
 							foreach (MethodInfo m in sourceType.AsType().GetRuntimeMethods())
 							{
 								if (m.Name.EndsWith("IElementController.SetValueFromRenderer"))
@@ -354,6 +356,9 @@ namespace Xamarin.Forms
 									}
 								}
 							}
+#else
+							setValueMethod = typeof(IElementController).GetMethod("SetValueFromRenderer", new[] { typeof(BindableProperty), typeof(object) });
+#endif
 							if (setValueMethod != null)
 							{
 								part.LastSetter = setValueMethod;
@@ -363,10 +368,10 @@ namespace Xamarin.Forms
 						}
 					}
 				}
-
+#if !NETSTANDARD1_0
 				TupleElementNamesAttribute tupleEltNames;
 				if (   property != null
-				    && part.NextPart != null
+					&& part.NextPart != null
 					&& property.PropertyType.IsGenericType
 					&& (   property.PropertyType.GetGenericTypeDefinition() == typeof(ValueTuple<>)
 						|| property.PropertyType.GetGenericTypeDefinition() == typeof(ValueTuple<,>)
@@ -388,10 +393,12 @@ namespace Xamarin.Forms
 						nextPart.Content = index.ToString();
 					}
 				}
+#endif
 			}
-		}
 
+		}
 		static Type[] DecimalTypes = new[] { typeof(float), typeof(decimal), typeof(double) };
+
 		bool TryConvert(BindingExpressionPart part, ref object value, Type convertTo, bool toTarget)
 		{
 			if (value == null)
@@ -466,7 +473,7 @@ namespace Xamarin.Forms
 			}
 
 			public void SubscribeTo(INotifyPropertyChanged source, PropertyChangedEventHandler listener)
-			{ 
+			{
 				source.PropertyChanged += _handler;
 				_source.SetTarget(source);
 				_listener.SetTarget(listener);
@@ -475,7 +482,7 @@ namespace Xamarin.Forms
 			public void Unsubscribe()
 			{
 				INotifyPropertyChanged source;
-				if (_source.TryGetTarget(out source) && source!=null)
+				if (_source.TryGetTarget(out source) && source != null)
 					source.PropertyChanged -= _handler;
 				_source.SetTarget(null);
 				_listener.SetTarget(null);

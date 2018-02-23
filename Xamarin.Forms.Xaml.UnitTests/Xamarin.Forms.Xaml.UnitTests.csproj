@@ -564,6 +564,18 @@
     <Compile Include="InlineCSS.xaml.cs">
       <DependentUpon>InlineCSS.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Issues\Gh1497.xaml.cs">
+      <DependentUpon>Gh1497.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Issues\Gh1554.xaml.cs">
+      <DependentUpon>Gh1554.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Issues\Gh1566.xaml.cs">
+      <DependentUpon>Gh1566.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Issues\Gh1766.xaml.cs">
+      <DependentUpon>Gh1766.xaml</DependentUpon>
+    </Compile>
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <Import Project="..\.nuspec\Xamarin.Forms.Debug.targets" />
@@ -1002,6 +1014,19 @@
       <Generator>MSBuild:UpdateDesignTimeXaml</Generator>
     </EmbeddedResource>
     <EmbeddedResource Include="Issues\Gh1346.xaml">
+      <Generator>MSBuild:UpdateDesignTimeXaml</Generator>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Issues\Gh1497.xaml">
+      <Generator>MSBuild:UpdateDesignTimeXaml</Generator>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Issues\Gh1554.xaml">
+      <Generator>MSBuild:UpdateDesignTimeXaml</Generator>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Issues\Gh1566.xaml">
+      <Generator>MSBuild:UpdateDesignTimeXaml</Generator>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Issues\Gh1766.xaml">
+      <SubType>Designer</SubType>
       <Generator>MSBuild:UpdateDesignTimeXaml</Generator>
     </EmbeddedResource>
   </ItemGroup>

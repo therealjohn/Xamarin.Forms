@@ -62,7 +62,7 @@ namespace Xamarin.Forms.Platform.Tizen
 		{
 			if (_naviFrame == null)
 			{
-				_naviFrame = new Naviframe(Forms.Context.MainWindow);
+				_naviFrame = new Naviframe(Forms.NativeParent);
 				_naviFrame.PreserveContentOnPop = true;
 				_naviFrame.DefaultBackButtonEnabled = false;
 				_naviFrame.AnimationFinished += OnAnimationFinished;
@@ -99,21 +99,25 @@ namespace Xamarin.Forms.Platform.Tizen
 				navigation.RemovePageRequested += OnRemovePageRequested;
 				navigation.InsertPageBeforeRequested += OnInsertPageBeforeRequested;
 
-				var pageController = e.NewElement as IPageController;
-				pageController.InternalChildren.CollectionChanged += OnPageCollectionChanged;
-
-				foreach (Page page in pageController.InternalChildren)
-				{
-					_naviItemMap[page] = _naviFrame.Push(Platform.GetOrCreateRenderer(page).NativeView, SpanTitle(page.Title));
-					page.PropertyChanged += NavigationBarPropertyChangedHandler;
-
-					UpdateHasNavigationBar(page);
-				}
-
 				_toolbarTracker.Target = e.NewElement;
 				_previousPage = e.NewElement.CurrentPage;
 			}
 			base.OnElementChanged(e);
+		}
+
+		protected override void OnElementReady()
+		{
+			base.OnElementReady();
+			var pageController = Element as IPageController;
+			pageController.InternalChildren.CollectionChanged += OnPageCollectionChanged;
+
+			foreach (Page page in pageController.InternalChildren)
+			{
+				_naviItemMap[page] = _naviFrame.Push(Platform.GetRenderer(page).NativeView, SpanTitle(page.Title));
+				page.PropertyChanged += NavigationBarPropertyChangedHandler;
+
+				UpdateHasNavigationBar(page);
+			}
 		}
 
 		protected override void OnElementPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -122,12 +126,11 @@ namespace Xamarin.Forms.Platform.Tizen
 
 			if (e.PropertyName == NavigationPage.CurrentPageProperty.PropertyName)
 			{
-				(_previousPage as IPageController)?.SendDisappearing();
-				_previousPage = Element.CurrentPage;
-				Device.StartTimer(TimeSpan.Zero, () =>
+				Device.BeginInvokeOnMainThread(() =>
 				{
+					(_previousPage as IPageController)?.SendDisappearing();
+					_previousPage = Element.CurrentPage;
 					(_previousPage as IPageController)?.SendAppearing();
-					return false;
 				});
 			}
 			else if (e.PropertyName == NavigationPage.BarTextColorProperty.PropertyName)
@@ -262,7 +265,7 @@ namespace Xamarin.Forms.Platform.Tizen
 
 		EButton CreateNavigationButton(string text)
 		{
-			EButton button = new EButton(Forms.Context.MainWindow);
+			EButton button = new EButton(Forms.NativeParent);
 			button.Clicked += (sender, e) =>
 			{
 				if (!Element.SendBackButtonPressed())
@@ -303,7 +306,7 @@ namespace Xamarin.Forms.Platform.Tizen
 			if (item == default(ToolbarItem))
 				return null;
 
-			Native.Button button = new Native.Button(Forms.Context.MainWindow);
+			Native.Button button = new Native.Button(Forms.NativeParent);
 			button.Clicked += (s, e) =>
 			{
 				IMenuItemController control = item;
@@ -329,7 +332,7 @@ namespace Xamarin.Forms.Platform.Tizen
 			}
 			else
 			{
-				Native.Image iconImage = new Native.Image(Forms.Context.MainWindow);
+				Native.Image iconImage = new Native.Image(Forms.NativeParent);
 				var task = iconImage.LoadFromImageSourceAsync(item.Icon);
 				button.Image = iconImage;
 			}
@@ -339,7 +342,7 @@ namespace Xamarin.Forms.Platform.Tizen
 
 		EToolbar GetBreadCrumbsBar()
 		{
-			EToolbar toolbar = new EToolbar(Forms.Context.MainWindow)
+			EToolbar toolbar = new EToolbar(Forms.NativeParent)
 			{
 				Style = StyleNavigationBar,
 				ItemAlignment = 0,
@@ -374,6 +377,7 @@ namespace Xamarin.Forms.Platform.Tizen
 		{
 			if ((Element as IPageController).InternalChildren.Count == _naviFrame.NavigationStack.Count)
 			{
+				nre.Page?.SendDisappearing();
 				UpdateNavigationBar(PreviousPage, PreviousNaviItem);
 
 				if (nre.Animated)

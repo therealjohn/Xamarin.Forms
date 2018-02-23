@@ -17,6 +17,13 @@ namespace Xamarin.Forms.StyleSheets.UnitTests
 			Internals.Registrar.RegisterAll(new Type[0]);
 		}
 
+		[TearDown]
+		public void TearDown()
+		{
+			Device.PlatformServices = null;
+			Application.ClearCurrent();
+		}
+
 		[Test]
 		public void PropertiesAreApplied()
 		{
@@ -47,6 +54,7 @@ namespace Xamarin.Forms.StyleSheets.UnitTests
 		[Test]
 		public void StylesAreCascading()
 		{
+			//color should cascade, background-color should not
 			var styleString = @"background-color: #ff0000; color: #00ff00;";
 			var style = Style.Parse(new CssReader(new StringReader(styleString)), '}');
 			Assume.That(style, Is.Not.Null);
@@ -64,7 +72,7 @@ namespace Xamarin.Forms.StyleSheets.UnitTests
 
 			style.Apply(layout);
 			Assert.That(layout.BackgroundColor, Is.EqualTo(Color.Red));
-			Assert.That(label.BackgroundColor, Is.EqualTo(Color.Red));
+			Assert.That(label.BackgroundColor, Is.EqualTo(Color.Default));
 			Assert.That(label.TextColor, Is.EqualTo(Color.Lime));
 		}
 
@@ -77,6 +85,18 @@ namespace Xamarin.Forms.StyleSheets.UnitTests
 
 			var layout = new StackLayout();
 			Assert.That(layout.GetValue(TextElement.TextColorProperty), Is.EqualTo(Color.Default));
+		}
+
+		[Test]
+		public void StyleSheetsOnAppAreApplied()
+		{
+			var app = new MockApplication();
+			app.Resources.Add(StyleSheet.FromString("label{ color: red;}"));
+			var page = new ContentPage {
+				Content = new Label()
+			};
+			app.MainPage = page;
+			Assert.That((page.Content as Label).TextColor, Is.EqualTo(Color.Red));
 		}
 	}
 }
