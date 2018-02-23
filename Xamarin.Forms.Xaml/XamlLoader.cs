@@ -47,7 +47,6 @@ namespace Xamarin.Forms.Xaml.Internals
 				xamlFileProvider = value;
 				//¯\_(ツ)_/¯ the previewer forgot to set that bool
 				DoNotThrowOnExceptions = value != null;
-				DesignMode.DesignModeEnabled = true;
 			}
 		}
 
